@@ -110,6 +110,22 @@
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     }
 
+    /* 小屏幕（手机）：窗口整体缩小 */
+    @media (max-width: 480px) {
+      .tip-window {
+        width: 170px;
+        height: 64px;
+      }
+
+      .tip-bar {
+        height: 13px;
+      }
+
+      .tip-text {
+        font-size: 12px;
+      }
+    }
+
     /* 弹出动画：从缩小的模糊状态弹跳进来，回弹式缓动 */
     .tip-window.pop-in {
       animation: popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
@@ -162,6 +178,14 @@
     ];
 
     /**
+     * 获取当前屏幕下弹窗的实际尺寸（与CSS媒体查询保持一致）
+     */
+    function getTipSize() {
+      const isMobile = window.innerWidth <= 480;
+      return isMobile ? { width: 170, height: 64 } : { width: 280, height: 100 };
+    }
+
+    /**
      * 创建单个温馨提示弹窗
      * @param {number|null} fixedX 指定x坐标（可选）
      * @param {number|null} fixedY 指定y坐标（可选）
@@ -192,8 +216,7 @@
       // 计算位置：未指定时随机（确保弹窗完全显示在屏幕内）
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
-      const windowWidth = 280;
-      const windowHeight = 100;
+      const { width: windowWidth, height: windowHeight } = getTipSize();
       const x = fixedX !== null ? fixedX
         : Math.floor(Math.random() * (screenWidth - windowWidth));
       const y = fixedY !== null ? fixedY
@@ -241,9 +264,9 @@
         await new Promise(resolve => setTimeout(resolve, createInterval));
       }
 
-      // 最后一个弹窗出现5秒后：清空，再生成心形弹窗
+      // 最后一个弹窗出现2秒后：清空，再生成心形弹窗
       if (shouldClose) return;
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       if (shouldClose) return;
       clearAllWindows();
       await createHeartShape();
@@ -271,8 +294,7 @@
       const count = 60; // 心形上的窗口数量
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
-      const windowWidth = 280;
-      const windowHeight = 100;
+      const { width: windowWidth, height: windowHeight } = getTipSize();
 
       // 缩放系数：让心形适配屏幕（心形原始范围约 x∈[-16,16], y∈[-17,13]）
       const scale = Math.min(screenWidth, screenHeight) / 40;
