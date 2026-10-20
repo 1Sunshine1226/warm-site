@@ -248,6 +248,10 @@
     function closeAllWindows() {
       shouldClose = true;
       clearAllWindows();
+      // 退出全屏，恢复正常浏览
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => { });
+      }
     }
 
     /**
@@ -269,7 +273,26 @@
       await new Promise(resolve => setTimeout(resolve, 2000));
       if (shouldClose) return;
       clearAllWindows();
+      // 手机端：尝试全屏并锁定横屏，让心形显示更完整
+      if (window.innerWidth <= 480) {
+        await tryLockLandscape();
+        // 等待屏幕方向切换完成，innerWidth/innerHeight才会更新
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
+      if (shouldClose) return;
       await createHeartShape();
+    }
+
+    /**
+     * 手机端尝试锁定横屏（不支持或被拒绝时静默退回竖屏）
+     * 注意：全屏已在点击按钮时申请（必须在用户手势中调用）
+     */
+    async function tryLockLandscape() {
+      try {
+        await screen.orientation.lock('landscape');
+      } catch (e) {
+        console.log('横屏锁定失败，保持竖屏显示:', e);
+      }
     }
 
     /**
@@ -324,6 +347,12 @@
     startBtn.addEventListener('click', () => {
       shouldClose = false; // 重置关闭标志，允许再次弹出
       startBtn.style.display = 'none'; // 隐藏按钮
+      // 手机端：点击时趁用户手势申请全屏（后面才能锁定横屏）
+      if (window.innerWidth <= 480 && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(e => {
+          console.log('全屏申请失败:', e);
+        });
+      }
       createWindowsBatch();
       // 点击后才开始计时，30秒后自动关闭所有弹窗
       setTimeout(closeAllWindows, 30000);
