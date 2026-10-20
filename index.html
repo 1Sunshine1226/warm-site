@@ -110,6 +110,42 @@
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     }
 
+    /* 横屏提示遮罩 */
+    #rotateTip {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: rgba(255, 240, 245, 0.96);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      font-size: 20px;
+      color: #d6336c;
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    /* 手机图标：反复做 竖→横 旋转示意 */
+    #rotateTip .rotate-icon {
+      font-size: 56px;
+      animation: rotateDemo 1.6s ease-in-out infinite;
+    }
+
+    @keyframes rotateDemo {
+
+      0%,
+      20% {
+        transform: rotate(0deg);
+      }
+
+      60%,
+      100% {
+        transform: rotate(90deg);
+      }
+    }
+
     /* 移动端（窄屏或触屏设备）：窗口整体缩小 */
     @media (max-width: 480px),
     (pointer: coarse) and (max-width: 1024px) {
@@ -292,14 +328,58 @@
       await new Promise(resolve => setTimeout(resolve, 2000));
       if (shouldClose) return;
       clearAllWindows();
-      // 手机端：尝试全屏并锁定横屏，让心形显示更完整
+      // 手机端：先尝试锁定横屏，失败则引导用户手动旋转手机
       if (isMobileDevice()) {
         await tryLockLandscape();
         // 等待屏幕方向切换完成，innerWidth/innerHeight才会更新
         await new Promise(resolve => setTimeout(resolve, 400));
+        // 若仍是竖屏，显示旋转提示并等待用户横屏（最长等8秒）
+        if (window.innerWidth < window.innerHeight) {
+          await waitForLandscape(8000);
+        }
       }
       if (shouldClose) return;
       await createHeartShape();
+    }
+
+    /**
+     * 当前是否为横屏
+     */
+    function isLandscape() {
+      return window.innerWidth > window.innerHeight;
+    }
+
+    /**
+     * 显示「请旋转手机」提示，等待用户转为横屏
+     * @param {number} timeout 最长等待毫秒数，超时后按竖屏继续
+     */
+    function waitForLandscape(timeout) {
+      return new Promise(resolve => {
+        // 已横屏则直接返回
+        if (isLandscape()) return resolve();
+
+        // 创建旋转提示遮罩
+        const overlay = document.createElement('div');
+        overlay.id = 'rotateTip';
+        overlay.innerHTML = '<div class="rotate-icon">📱</div><div>请旋转手机至横屏<br>心形即将出现 ❤</div>';
+        document.body.appendChild(overlay);
+
+        let finished = false;
+        const done = () => {
+          if (finished) return;
+          finished = true;
+          window.removeEventListener('resize', onResize);
+          overlay.remove();
+          resolve();
+        };
+        const onResize = () => {
+          if (isLandscape()) done();
+        };
+
+        window.addEventListener('resize', onResize);
+        // 超时后不再等待，竖屏继续播放心形
+        setTimeout(done, timeout);
+      });
     }
 
     /**
