@@ -110,8 +110,9 @@
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     }
 
-    /* 小屏幕（手机）：窗口整体缩小 */
-    @media (max-width: 480px) {
+    /* 移动端（窄屏或触屏设备）：窗口整体缩小 */
+    @media (max-width: 480px),
+    (pointer: coarse) and (max-width: 1024px) {
       .tip-window {
         width: 170px;
         height: 64px;
@@ -178,11 +179,29 @@
     ];
 
     /**
+     * 判断是否为手机/平板等移动端设备
+     * 综合 UA 检测 + 触屏能力 + 指针类型，比单纯看屏幕宽度可靠
+     */
+    function isMobileDevice() {
+      // 1. 新版浏览器的标准接口
+      if (navigator.userAgentData && typeof navigator.userAgentData.mobile === 'boolean') {
+        if (navigator.userAgentData.mobile) return true;
+      }
+      // 2. UA 关键词匹配（覆盖绝大多数手机/平板）
+      const ua = navigator.userAgent;
+      const mobileRE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|HarmonyOS/i;
+      if (mobileRE.test(ua)) return true;
+      // 3. 兜底：支持触屏 且 指针为粗糙（手指）
+      const hasTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+      const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      return hasTouch && coarsePointer && window.innerWidth <= 1024;
+    }
+
+    /**
      * 获取当前屏幕下弹窗的实际尺寸（与CSS媒体查询保持一致）
      */
     function getTipSize() {
-      const isMobile = window.innerWidth <= 480;
-      return isMobile ? { width: 170, height: 64 } : { width: 280, height: 100 };
+      return isMobileDevice() ? { width: 170, height: 64 } : { width: 280, height: 100 };
     }
 
     /**
@@ -258,7 +277,7 @@
      * 分批创建弹窗
      */
     async function createWindowsBatch() {
-      const totalWindows = 50; // 弹窗总数
+      const totalWindows = 75; // 弹窗总数
       const createInterval = 50; // 创建间隔（毫秒）
 
       for (let i = 0; i < totalWindows; i++) {
@@ -274,7 +293,7 @@
       if (shouldClose) return;
       clearAllWindows();
       // 手机端：尝试全屏并锁定横屏，让心形显示更完整
-      if (window.innerWidth <= 480) {
+      if (isMobileDevice()) {
         await tryLockLandscape();
         // 等待屏幕方向切换完成，innerWidth/innerHeight才会更新
         await new Promise(resolve => setTimeout(resolve, 400));
@@ -348,7 +367,7 @@
       shouldClose = false; // 重置关闭标志，允许再次弹出
       startBtn.style.display = 'none'; // 隐藏按钮
       // 手机端：点击时趁用户手势申请全屏（后面才能锁定横屏）
-      if (window.innerWidth <= 480 && document.documentElement.requestFullscreen) {
+      if (isMobileDevice() && document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(e => {
           console.log('全屏申请失败:', e);
         });
