@@ -168,6 +168,14 @@
         padding: 10px 20px;
         font-size: 14px;
       }
+
+      .ending-animal {
+        font-size: 26px;
+      }
+
+      .ending-walker {
+        font-size: 28px;
+      }
     }
 
     /* 弹出动画：从缩小的模糊状态弹跳进来，回弹式缓动 */
@@ -273,12 +281,150 @@
       line-height: 1.9;
       color: #444;
     }
+
+    /* 结束页动态背景 */
+    #endingScene {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 9990;
+      background: linear-gradient(160deg, #fff5f7, #f3f0ff 55%, #eaf7ff);
+      background-size: 220% 220%;
+      animation: bgFlow 14s ease-in-out infinite;
+    }
+
+    #endingScene.hidden {
+      display: none;
+    }
+
+    @keyframes bgFlow {
+
+      0%,
+      100% {
+        background-position: 0% 0%;
+      }
+
+      50% {
+        background-position: 100% 100%;
+      }
+    }
+
+    /* 波点图案缓慢流动 */
+    #endingScene::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255, 154, 158, 0.22) 1.5px, transparent 1.5px);
+      background-size: 26px 26px;
+      animation: dotsShift 22s linear infinite;
+    }
+
+    @keyframes dotsShift {
+      to {
+        background-position: 260px 260px;
+      }
+    }
+
+    /* 漂浮的心形/星星 */
+    .ending-float {
+      position: absolute;
+      bottom: -40px;
+      opacity: 0;
+      animation: floatUp var(--dur, 9s) linear infinite;
+      animation-delay: var(--delay, 0s);
+      will-change: transform, opacity;
+    }
+
+    @keyframes floatUp {
+      0% {
+        transform: translateY(0) rotate(0deg) scale(0.8);
+        opacity: 0;
+      }
+
+      12% {
+        opacity: 0.9;
+      }
+
+      85% {
+        opacity: 0.75;
+      }
+
+      100% {
+        transform: translateY(-110vh) rotate(300deg) scale(1.1);
+        opacity: 0;
+      }
+    }
+
+    /* 小动物：原地蹦跳摇摆 */
+    .ending-animal {
+      position: absolute;
+      font-size: 34px;
+      animation: animalBob var(--dur, 5s) ease-in-out infinite;
+      animation-delay: var(--delay, 0s);
+      will-change: transform;
+    }
+
+    @keyframes animalBob {
+
+      0%,
+      100% {
+        transform: translateY(0) rotate(-6deg);
+      }
+
+      50% {
+        transform: translateY(-16px) rotate(6deg);
+      }
+    }
+
+    /* 走过屏幕的小动物 */
+    .ending-walker {
+      position: absolute;
+      font-size: 36px;
+      animation: walkAcross var(--dur, 18s) linear infinite;
+      animation-delay: var(--delay, 0s);
+      will-change: transform;
+    }
+
+    @keyframes walkAcross {
+      from {
+        transform: translateX(-12vw);
+      }
+
+      to {
+        transform: translateX(108vw);
+      }
+    }
+
+    /* 半透明光斑 */
+    .ending-blob {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.9), rgba(255, 182, 193, 0.35));
+      filter: blur(2px);
+      animation: blobDrift var(--dur, 16s) ease-in-out infinite alternate;
+      animation-delay: var(--delay, 0s);
+      will-change: transform;
+    }
+
+    @keyframes blobDrift {
+      from {
+        transform: translate(0, 0) scale(1);
+      }
+
+      to {
+        transform: translate(30px, -40px) scale(1.18);
+      }
+    }
   </style>
 </head>
 
 <body>
   <!-- 开始按钮：点击后才开始弹出小窗口 -->
   <button id="startBtn">点击一下试试</button>
+
+  <!-- 播放结束后铺满屏幕的动态背景 -->
+  <div id="endingScene" class="hidden"></div>
 
   <!-- 播放结束后的操作按钮 -->
   <div id="actionPanel" class="hidden">
@@ -452,14 +598,83 @@
     }
 
     /**
-     * 显示/隐藏结束后的操作按钮
+     * 显示/隐藏结束后的操作按钮和动态背景
      */
     function showActionPanel() {
+      buildEndingScene();
+      document.getElementById('endingScene').classList.remove('hidden');
       document.getElementById('actionPanel').classList.remove('hidden');
     }
 
     function hideActionPanel() {
       document.getElementById('actionPanel').classList.add('hidden');
+      document.getElementById('endingScene').classList.add('hidden');
+    }
+
+    /**
+     * 构建结束页动态背景：漂浮图案、光斑、蹦跳和走动的小动物
+     */
+    function buildEndingScene() {
+      const scene = document.getElementById('endingScene');
+      if (scene.dataset.built) return;
+      scene.dataset.built = '1';
+
+      const mobile = isMobileDevice();
+      const floaters = ['💗', '💖', '✨', '⭐', '🌸', '🍀', '💫', '🌷', '💝'];
+      const animals = ['🐰', '🐱', '🐶', '🐻', '🐼', '🐥', '🦊', '🐨', '🦋', '🐹'];
+
+      // 漂浮图案：从底部缓缓升起
+      const floatCount = mobile ? 9 : 16;
+      for (let i = 0; i < floatCount; i++) {
+        const item = document.createElement('span');
+        item.className = 'ending-float';
+        item.textContent = floaters[Math.floor(Math.random() * floaters.length)];
+        item.style.left = `${Math.random() * 96}%`;
+        item.style.fontSize = `${16 + Math.random() * 14}px`;
+        item.style.setProperty('--dur', `${7 + Math.random() * 7}s`);
+        item.style.setProperty('--delay', `${Math.random() * 10}s`);
+        scene.appendChild(item);
+      }
+
+      // 半透明光斑：缓慢漂移
+      const blobCount = mobile ? 4 : 7;
+      for (let i = 0; i < blobCount; i++) {
+        const blob = document.createElement('div');
+        blob.className = 'ending-blob';
+        const size = 90 + Math.random() * 160;
+        blob.style.width = `${size}px`;
+        blob.style.height = `${size}px`;
+        blob.style.left = `${Math.random() * 90}%`;
+        blob.style.top = `${Math.random() * 75}%`;
+        blob.style.setProperty('--dur', `${12 + Math.random() * 10}s`);
+        blob.style.setProperty('--delay', `${Math.random() * 6}s`);
+        scene.appendChild(blob);
+      }
+
+      // 小动物：原地蹦跳摇摆
+      const animalCount = mobile ? 4 : 6;
+      for (let i = 0; i < animalCount; i++) {
+        const animal = document.createElement('span');
+        animal.className = 'ending-animal';
+        animal.textContent = animals[Math.floor(Math.random() * animals.length)];
+        animal.style.left = `${8 + Math.random() * 80}%`;
+        animal.style.top = `${8 + Math.random() * 60}%`;
+        animal.style.setProperty('--dur', `${3.5 + Math.random() * 3}s`);
+        animal.style.setProperty('--delay', `${Math.random() * 2}s`);
+        scene.appendChild(animal);
+      }
+
+      // 沿底部走过屏幕的小动物
+      const walkerCount = mobile ? 2 : 3;
+      for (let i = 0; i < walkerCount; i++) {
+        const walker = document.createElement('span');
+        walker.className = 'ending-walker';
+        walker.textContent = animals[Math.floor(Math.random() * animals.length)];
+        walker.style.bottom = `${10 + i * 26}px`;
+        walker.style.setProperty('--dur', `${14 + Math.random() * 10}s`);
+        walker.style.setProperty('--delay', `${Math.random() * 8}s`);
+        scene.appendChild(walker);
+      }
     }
 
     /**
