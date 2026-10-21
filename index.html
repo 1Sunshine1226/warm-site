@@ -163,6 +163,11 @@
       .tip-text {
         font-size: 12px;
       }
+
+      .action-btn {
+        padding: 10px 20px;
+        font-size: 14px;
+      }
     }
 
     /* 弹出动画：从缩小的模糊状态弹跳进来，回弹式缓动 */
@@ -188,6 +193,86 @@
         transform: scale(1) rotate(var(--tilt, 0deg));
       }
     }
+
+    /* 结束后的操作按钮 */
+    #actionPanel {
+      position: fixed;
+      left: 50%;
+      bottom: 12%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 14px;
+      z-index: 10000;
+    }
+
+    #actionPanel.hidden {
+      display: none;
+    }
+
+    .action-btn {
+      padding: 12px 26px;
+      font-size: 16px;
+      color: #fff;
+      border: none;
+      border-radius: 22px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #ff9a9e, #fecfef);
+      box-shadow: 0 4px 14px rgba(255, 154, 158, 0.45);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .action-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(255, 154, 158, 0.6);
+    }
+
+    /* 文本展示窗 */
+    #textModal {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(88vw, 340px);
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      z-index: 10001;
+      overflow: hidden;
+    }
+
+    .text-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #ff9a9e, #fecfef);
+      color: #fff;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    #textModalClose {
+      width: 26px;
+      height: 26px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.35);
+      color: #fff;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .text-modal-body {
+      padding: 12px 16px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.9;
+      color: #444;
+    }
   </style>
 </head>
 
@@ -195,11 +280,19 @@
   <!-- 开始按钮：点击后才开始弹出小窗口 -->
   <button id="startBtn">点击一下试试</button>
 
+  <!-- 播放结束后的操作按钮 -->
+  <div id="actionPanel" class="hidden">
+    <button id="replayBtn" class="action-btn">再看一次</button>
+    <button id="textBtn" class="action-btn">窗口文本</button>
+  </div>
+
   <script>
     // 存储所有弹窗元素
     const allWindows = [];
     // 控制是否关闭的标志
     let shouldClose = false;
+    // 30秒自动关闭的计时器
+    let autoCloseTimer = null;
     // 温馨提示文字列表
     const tips = [
       '多喝热水哦~', '保持微笑吖', '每天都要元气满满',
@@ -344,6 +437,85 @@
       }
       if (shouldClose) return;
       await createHeartShape();
+
+      // 心形显示2秒后消失，然后出现操作按钮
+      if (shouldClose) return;
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (shouldClose) return;
+      clearAllWindows();
+      // 播放结束，取消30秒自动关闭，避免影响后续按钮
+      if (autoCloseTimer) {
+        clearTimeout(autoCloseTimer);
+        autoCloseTimer = null;
+      }
+      showActionPanel();
+    }
+
+    /**
+     * 显示/隐藏结束后的操作按钮
+     */
+    function showActionPanel() {
+      document.getElementById('actionPanel').classList.remove('hidden');
+    }
+
+    function hideActionPanel() {
+      document.getElementById('actionPanel').classList.add('hidden');
+    }
+
+    /**
+     * 用一个大窗口展示全部温馨提示文本
+     */
+    function showAllTexts() {
+      // 已打开则不重复创建
+      if (document.getElementById('textModal')) return;
+
+      const modal = document.createElement('div');
+      modal.id = 'textModal';
+
+      const head = document.createElement('div');
+      head.className = 'text-modal-head';
+      const title = document.createElement('span');
+      title.textContent = `全部暖心话（${tips.length}条）`;
+      const closeBtn = document.createElement('button');
+      closeBtn.id = 'textModalClose';
+      closeBtn.textContent = '×';
+      closeBtn.addEventListener('click', () => modal.remove());
+      head.appendChild(title);
+      head.appendChild(closeBtn);
+
+      const body = document.createElement('div');
+      body.className = 'text-modal-body';
+      tips.forEach((tip, index) => {
+        const line = document.createElement('div');
+        line.textContent = `${index + 1}. ${tip}`;
+        body.appendChild(line);
+      });
+
+      modal.appendChild(head);
+      modal.appendChild(body);
+      document.body.appendChild(modal);
+    }
+
+    /**
+     * 启动一次完整播放（首次点击 / 再看一次共用）
+     */
+    function startExperience() {
+      shouldClose = false; // 重置关闭标志，允许再次弹出
+      hideActionPanel();
+      // 关闭可能开着的文本窗
+      const modal = document.getElementById('textModal');
+      if (modal) modal.remove();
+      // 清除上一轮的自动关闭计时
+      if (autoCloseTimer) clearTimeout(autoCloseTimer);
+      autoCloseTimer = setTimeout(closeAllWindows, 30000);
+
+      // 手机端：点击时趁用户手势申请全屏（后面才能锁定横屏）
+      if (isMobileDevice() && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(e => {
+          console.log('全屏申请失败:', e);
+        });
+      }
+      createWindowsBatch();
     }
 
     /**
@@ -515,18 +687,15 @@
     // 点击按钮后才开始随机弹出小窗口
     const startBtn = document.getElementById('startBtn');
     startBtn.addEventListener('click', () => {
-      shouldClose = false; // 重置关闭标志，允许再次弹出
       startBtn.style.display = 'none'; // 隐藏按钮
-      // 手机端：点击时趁用户手势申请全屏（后面才能锁定横屏）
-      if (isMobileDevice() && document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(e => {
-          console.log('全屏申请失败:', e);
-        });
-      }
-      createWindowsBatch();
-      // 点击后才开始计时，30秒后自动关闭所有弹窗
-      setTimeout(closeAllWindows, 30000);
+      startExperience();
     });
+
+    // 再看一次：重新完整播放一遍
+    document.getElementById('replayBtn').addEventListener('click', startExperience);
+
+    // 窗口文本：用一个窗口展示全部文案
+    document.getElementById('textBtn').addEventListener('click', showAllTexts);
 
     // 监听空格键事件，关闭所有弹窗
     document.addEventListener('keydown', (e) => {
