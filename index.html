@@ -83,6 +83,8 @@
       /* 让顶部白条贴合圆角 */
       display: flex;
       flex-direction: column;
+      /* 随机倾斜角；虚拟横屏时窗口跟随舞台整体旋转 */
+      transform: rotate(var(--tilt, 0deg));
     }
 
     /* 顶部小白条：占窗口高度 1/5（100px × 1/5 = 20px） */
@@ -106,7 +108,7 @@
 
     /* 弹窗hover效果 */
     .tip-window:hover {
-      transform: scale(1.05);
+      transform: rotate(var(--tilt, 0deg)) scale(1.05);
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     }
 
@@ -240,12 +242,16 @@
       return isMobileDevice() ? { width: 170, height: 64 } : { width: 280, height: 100 };
     }
 
+    // 虚拟横屏舞台（手机端无法物理横屏时使用）
+    let heartStage = null;
+
     /**
      * 创建单个温馨提示弹窗
      * @param {number|null} fixedX 指定x坐标（可选）
      * @param {number|null} fixedY 指定y坐标（可选）
+     * @param {HTMLElement} parent 挂载的父容器，默认 body
      */
-    function showWarmTip(fixedX = null, fixedY = null) {
+    function showWarmTip(fixedX = null, fixedY = null, parent = document.body) {
       if (shouldClose) return;
 
       // 创建弹窗元素
@@ -284,16 +290,14 @@
       // 随机小倾斜角（-6° ~ 6°），让弹出更灵动
       const tilt = (Math.random() * 12 - 6).toFixed(1);
       windowElement.style.setProperty('--tilt', `${tilt}deg`);
-      // 添加弹出动画类
+      // 添加弹出动画类；动画结束后移除类，回到样式表中的基础旋转
       windowElement.classList.add('pop-in');
-      // 动画结束后移除类，避免 hover 缩放冲突
       windowElement.addEventListener('animationend', () => {
         windowElement.classList.remove('pop-in');
-        windowElement.style.transform = `rotate(${tilt}deg)`;
       }, { once: true });
 
-      // 添加到页面和管理列表
-      document.body.appendChild(windowElement);
+      // 添加到指定容器和管理列表
+      parent.appendChild(windowElement);
       allWindows.push(windowElement);
     }
 
@@ -333,9 +337,9 @@
         await tryLockLandscape();
         // 等待屏幕方向切换完成，innerWidth/innerHeight才会更新
         await new Promise(resolve => setTimeout(resolve, 400));
-        // 若仍是竖屏，显示旋转提示并等待用户横屏（最长等8秒）
+        // 若仍是竖屏，显示旋转提示并等待用户横屏（最长等3秒）
         if (window.innerWidth < window.innerHeight) {
-          await waitForLandscape(8000);
+          await waitForLandscape(3000);
         }
       }
       if (shouldClose) return;
@@ -361,7 +365,7 @@
         // 创建旋转提示遮罩
         const overlay = document.createElement('div');
         overlay.id = 'rotateTip';
-        overlay.innerHTML = '<div class="rotate-icon">📱</div><div>请旋转手机至横屏<br>心形即将出现 ❤</div>';
+        overlay.innerHTML = '<div class="rotate-icon">📱</div><div>请把手机横过来<br>心形即将出现 ❤</div>';
         document.body.appendChild(overlay);
 
         let finished = false;
@@ -399,13 +403,38 @@
      */
     function clearAllWindows() {
       allWindows.forEach(win => {
-        try {
-          document.body.removeChild(win);
-        } catch (e) {
-          console.log('关闭弹窗失败:', e);
-        }
+        win.remove();
       });
       allWindows.length = 0;
+      // 一并清理虚拟横屏舞台
+      if (heartStage) {
+        heartStage.remove();
+        heartStage = null;
+      }
+    }
+
+    /**
+     * 创建虚拟横屏舞台：把内容整体旋转 90°，让竖屏手机也能看到横屏比例
+     * 逻辑宽 = 屏幕物理高，逻辑高 = 屏幕物理宽
+     */
+    function createHeartStage() {
+      const stage = document.createElement('div');
+      stage.id = 'heartStage';
+      const logicalWidth = window.innerHeight;
+      const logicalHeight = window.innerWidth;
+      stage.style.cssText = `
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: ${logicalWidth}px;
+        height: ${logicalHeight}px;
+        transform: translate(-50%, -50%) rotate(90deg);
+        transform-origin: center center;
+        z-index: 9997;
+      `;
+      document.body.appendChild(stage);
+      heartStage = stage;
+      return stage;
     }
 
     /**
@@ -414,31 +443,73 @@
      */
     async function createHeartShape() {
       const count = 60; // 心形上的窗口数量
-      const screenWidth = window.innerWidth;
-      const screenHeight = window.innerHeight;
       const { width: windowWidth, height: windowHeight } = getTipSize();
 
-      // 缩放系数：让心形适配屏幕（心形原始范围约 x∈[-16,16], y∈[-17,13]）
-      const scale = Math.min(screenWidth, screenHeight) / 40;
-      // 心形中心点（屏幕坐标）
-      const centerX = screenWidth / 2;
-      const centerY = screenHeight / 2;
+      // 默认铺满当前视口；手机端若仍是竖屏，则使用虚拟横屏舞台
+      let parent = document.body;
+      let areaWidth = window.innerWidth;
+      let areaHeight = window.innerHeight;
+      let virtualLandscape = false;
+      let aborted = false;
+
+      if (isMobileDevice() && !isLandscape()) {
+        parent = createHeartStage();
+        areaWidth = window.innerHeight;
+        areaHeight = window.innerWidth;
+        virtualLandscape = true;
+        console.log('手机端启动虚拟横屏，心形按横屏比例绘制');
+      }
+
+      // 虚拟横屏期间若视口真正变成横屏，立刻重绘为正向横屏布局
+      let renderTimer = null;
+      let orientationTimer = null;
+      const onOrientationChange = () => {
+        if (!virtualLandscape || aborted) return;
+        // 防抖：等方向切换稳定后再判断
+        clearTimeout(orientationTimer);
+        orientationTimer = setTimeout(() => {
+          if (aborted || !isLandscape()) return;
+          aborted = true;
+          clearTimeout(renderTimer);
+          window.removeEventListener('resize', onOrientationChange);
+          window.removeEventListener('orientationchange', onOrientationChange);
+          mql.removeEventListener('change', onOrientationChange);
+          clearAllWindows();
+          if (!shouldClose) createHeartShape();
+        }, 300);
+      };
+      const mql = window.matchMedia('(orientation: landscape)');
+      window.addEventListener('resize', onOrientationChange);
+      window.addEventListener('orientationchange', onOrientationChange);
+      mql.addEventListener('change', onOrientationChange);
+
+      // 缩放系数：让心形适配可用区域（心形原始范围约 x∈[-16,16], y∈[-17,13]）
+      const scale = Math.min(areaWidth, areaHeight) / 40;
+      // 心形中心点
+      const centerX = areaWidth / 2;
+      const centerY = areaHeight / 2;
 
       for (let i = 0; i < count; i++) {
-        if (shouldClose) return;
+        if (shouldClose || aborted) break;
         const t = (i / count) * Math.PI * 2;
         const hx = 16 * Math.pow(Math.sin(t), 3);
         const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t)
           - 2 * Math.cos(3 * t) - Math.cos(4 * t);
 
-        // 映射到屏幕坐标（y轴翻转，因为屏幕y向下）并居中窗口
+        // 映射到画布坐标（y轴翻转，因为屏幕y向下）并居中窗口
         const x = Math.round(centerX + hx * scale - windowWidth / 2);
         const y = Math.round(centerY - hy * scale - windowHeight / 2);
 
-        showWarmTip(x, y);
+        showWarmTip(x, y, parent);
         // 逐个弹出，有心跳般的效果
-        await new Promise(resolve => setTimeout(resolve, 40));
+        await new Promise(resolve => {
+          renderTimer = setTimeout(resolve, 40);
+        });
       }
+
+      window.removeEventListener('resize', onOrientationChange);
+      window.removeEventListener('orientationchange', onOrientationChange);
+      mql.removeEventListener('change', onOrientationChange);
     }
 
     // 点击按钮后才开始随机弹出小窗口
